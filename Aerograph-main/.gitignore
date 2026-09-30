@@ -1,0 +1,4 @@
+backend/__pycache__/
+frontend/.dart_tool/
+frontend/build/
+*.log

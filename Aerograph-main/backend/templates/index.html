@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070b10">
+  <title>Aerograph | Weather Field</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <style>
+    :root { color-scheme: dark; --paper:#f4f7fb; --muted:rgba(232,240,250,.56); --dim:rgba(232,240,250,.38); --edge:rgba(226,237,249,.13); --glass:rgba(10,17,26,.76); --blue:#88ccff; --cyan:#69dfd1; --mono:"DM Mono",monospace; --sans:"Inter",sans-serif; }
+    * { box-sizing:border-box; }
+    html,body { width:100%; height:100%; margin:0; overflow:hidden; background:#070b10; color:var(--paper); font-family:var(--sans); }
+    button,input { font:inherit; }
+    #map { position:absolute; inset:0; width:100%; height:100vh; display:block; background:#091019; }
+    .leaflet-container { background:#091019; font-family:var(--sans); cursor:crosshair; }
+    .leaflet-control-zoom { border:1px solid var(--edge)!important; border-radius:8px!important; overflow:hidden; box-shadow:0 8px 28px #0006!important; }
+    .leaflet-control-zoom a { background:rgba(10,17,26,.78)!important; color:var(--paper)!important; border-color:var(--edge)!important; backdrop-filter:blur(12px); }
+    .leaflet-control-scale-line { border:1px solid rgba(255,255,255,.42)!important; border-top:0!important; background:rgba(5,10,16,.58)!important; color:rgba(255,255,255,.75)!important; text-shadow:none!important; }
+    .leaflet-control-attribution { background:rgba(5,10,16,.62)!important; color:var(--muted)!important; }
+    .leaflet-control-attribution a { color:var(--blue)!important; }
+    .glass { border:1px solid var(--edge); border-radius:9px; background:var(--glass); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); box-shadow:0 18px 55px rgba(0,0,0,.32),inset 0 1px rgba(255,255,255,.045); }
+    .topbar { position:absolute; z-index:700; top:16px; left:16px; right:16px; height:54px; display:flex; align-items:center; gap:18px; padding:0 14px; }
+    .brand { flex:0 0 178px; display:flex; align-items:center; gap:10px; }
+    .brand-icon { width:31px; height:31px; display:grid; place-items:center; border:1px solid var(--edge); border-radius:8px; background:rgba(136,204,255,.1); color:var(--blue); }
+    .brand-icon svg { width:17px; height:17px; }
+    .brand-title { font-size:11px; font-weight:800; letter-spacing:.1em; }
+    .brand-caption { margin-top:3px; color:var(--dim); font:7px var(--mono); }
+    .search { position:relative; flex:1; max-width:480px; }
+    .search input { width:100%; height:35px; padding:0 82px 0 34px; outline:none; border:1px solid rgba(255,255,255,.1); border-radius:7px; background:rgba(255,255,255,.035); color:var(--paper); font-size:10px; }
+    .search input:focus { border-color:rgba(136,204,255,.5); }
+    .search-icon { position:absolute; top:10px; left:11px; width:14px; height:14px; color:var(--muted); pointer-events:none; }
+    .search button { position:absolute; top:4px; right:4px; height:27px; padding:0 9px; border:0; border-radius:5px; background:rgba(136,204,255,.12); color:#dceeff; font:8px var(--mono); }
+    .top-status { margin-left:auto; display:flex; align-items:center; gap:7px; color:var(--muted); white-space:nowrap; font:8px var(--mono); }
+    .status-dot { width:6px; height:6px; border-radius:50%; background:#79e6b5; box-shadow:0 0 10px rgba(121,230,181,.65); }
+    .unit-control { height:32px; padding:0 10px; border:1px solid var(--edge); border-radius:6px; background:rgba(255,255,255,.035); color:var(--paper); font:8px var(--mono); }
+    .panel { position:absolute; z-index:650; width:330px; max-height:calc(100vh - 100px); padding:17px; overflow:auto; scrollbar-width:none; }
+    .panel::-webkit-scrollbar { display:none; }
+    .weather-panel { top:84px; left:16px; bottom:16px; }
+    .panel-top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .eyebrow { color:var(--dim); font:8px var(--mono); text-transform:uppercase; }
+    .weather-live { display:flex; align-items:center; gap:6px; color:#9ce6c2; font:7px var(--mono); }
+    .weather-live .status-dot { width:5px; height:5px; }
+    .location-name { margin:15px 0 2px; font-size:19px; font-weight:600; letter-spacing:0; line-height:1.25; }
+    .coordinates { color:var(--dim); font:8px var(--mono); }
+    .current-weather { display:flex; align-items:center; gap:14px; padding:15px 0 13px; }
+    .weather-symbol { width:50px; height:50px; color:#bfe5ff; filter:drop-shadow(0 4px 15px rgba(116,195,255,.25)); }
+    .temperature { display:flex; align-items:flex-start; color:#fff; font-size:53px; font-weight:400; line-height:.95; letter-spacing:0; }
+    .temperature-unit { margin:7px 0 0 4px; color:var(--muted); font-size:15px; }
+    .weather-condition { margin-top:6px; color:var(--muted); font-size:9px; }
+    .high-low { margin-left:auto; align-self:flex-end; padding-bottom:3px; color:var(--soft-white,rgba(255,255,255,.7)); font:8px var(--mono); text-align:right; line-height:1.8; }
+    .weather-summary { padding:10px 0 12px; border-top:1px solid rgba(255,255,255,.09); color:rgba(240,245,250,.7); font-size:9px; line-height:1.55; }
+    .panel-section-title { display:flex; align-items:center; justify-content:space-between; margin:13px 0 8px; color:var(--muted); font:8px var(--mono); text-transform:uppercase; }
+    .hourly-row { display:flex; gap:7px; overflow-x:auto; padding:0 0 5px; scrollbar-width:none; }
+    .hourly-row::-webkit-scrollbar { display:none; }
+    .hour { flex:0 0 47px; padding:8px 5px; border:1px solid rgba(255,255,255,.065); border-radius:7px; background:rgba(255,255,255,.025); text-align:center; }
+    .hour-time { color:var(--dim); font:7px var(--mono); }
+    .hour-icon { width:17px; height:17px; margin:8px auto 5px; color:var(--blue); }
+    .hour-temp { color:rgba(255,255,255,.9); font:9px var(--mono); }
+    .hour-rain { margin-top:5px; color:#8fcfff; font:7px var(--mono); }
+    .details-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+    .detail { min-height:57px; padding:9px; border:1px solid rgba(255,255,255,.07); border-radius:7px; background:rgba(255,255,255,.025); }
+    .detail-label { color:var(--dim); font:7px var(--mono); text-transform:uppercase; }
+    .detail-value { margin-top:7px; color:rgba(255,255,255,.9); font:11px var(--mono); }
+    .detail-value small { color:var(--muted); font-size:8px; }
+    .forecast-row { display:flex; align-items:center; justify-content:space-between; padding:7px 1px; border-bottom:1px solid rgba(255,255,255,.055); color:rgba(255,255,255,.7); font-size:8px; }
+    .forecast-row:last-child { border:0; }
+    .forecast-day { width:70px; }
+    .forecast-rain { color:#8fcfff; font:7px var(--mono); }
+    .forecast-temps { color:rgba(255,255,255,.7); font:8px var(--mono); }
+    .notice { min-height:14px; margin:10px 0 0; color:var(--dim); font-size:8px; line-height:1.45; }
+    .risk-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+    .risk-cell { min-width:0; padding:8px 7px; border:1px solid rgba(255,255,255,.08); border-radius:7px; background:rgba(255,255,255,.025); }
+    .risk-name { overflow:hidden; color:var(--dim); font:7px var(--mono); text-overflow:ellipsis; white-space:nowrap; }
+    .risk-value { margin-top:6px; color:#fff; font:12px var(--mono); }
+    .risk-level { margin-top:3px; color:var(--muted); font:6px var(--mono); }
+    .risk-track { height:2px; margin-top:6px; overflow:hidden; border-radius:2px; background:rgba(255,255,255,.09); }
+    .risk-fill { width:0; height:100%; background:#ff6877; box-shadow:0 0 8px rgba(255,80,100,.55); transition:width .35s ease; }
+    .risk-unavailable { color:var(--dim); }
+    .cursor-badge { position:absolute; z-index:800; display:none; min-width:130px; padding:8px 10px; border:1px solid var(--edge); border-radius:7px; background:rgba(7,13,21,.84); color:var(--paper); pointer-events:none; backdrop-filter:blur(12px); box-shadow:0 9px 24px #0005; }
+    .cursor-badge.visible { display:block; }
+    .cursor-coords { color:var(--muted); font:7px var(--mono); }
+    .cursor-temp { margin-top:4px; font-size:10px; font-weight:600; }
+    .pick-panel { position:absolute; z-index:720; right:18px; bottom:18px; width:260px; padding:14px; }
+    .pick-panel[hidden] { display:none; }
+    .pick-title { font-size:11px; font-weight:700; }
+    .pick-coord { margin-top:5px; color:var(--muted); font:8px var(--mono); }
+    .mode-switch { display:grid; grid-template-columns:1fr 1fr; gap:5px; margin:11px 0 8px; padding:3px; border:1px solid rgba(255,255,255,.08); border-radius:7px; background:rgba(0,0,0,.18); }
+    .mode-button { height:27px; border:0; border-radius:5px; background:transparent; color:var(--muted); font:7px var(--mono); }
+    .mode-button.active { background:rgba(136,204,255,.14); color:#d9efff; }
+    .simulation-button { width:100%; min-height:34px; border:1px solid rgba(136,204,255,.3); border-radius:6px; background:rgba(136,204,255,.1); color:#eaf6ff; font:8px var(--mono); }
+    .simulation-button:hover { background:rgba(136,204,255,.18); }
+    .simulation-button:disabled { opacity:.38; cursor:not-allowed; }
+    .breaking-overlay { position:fixed; z-index:950; top:16px; left:50%; width:min(690px,calc(100vw - 390px)); padding:15px 16px 13px; transform:translateX(-50%); border:1px solid rgba(255,90,105,.35); border-radius:9px; background:rgba(25,12,18,.76); box-shadow:0 16px 50px rgba(0,0,0,.45),0 0 30px rgba(255,45,65,.08); backdrop-filter:blur(15px); -webkit-backdrop-filter:blur(15px); }
+    .breaking-overlay[hidden] { display:none; }
+    .broadcast-kicker { display:flex; align-items:center; gap:8px; color:rgba(255,190,196,.8); font:8px var(--mono); }
+    .broadcast-dot { width:7px; height:7px; border-radius:50%; background:#ff596c; box-shadow:0 0 12px rgba(255,64,82,.85); animation:broadcast-pulse .9s ease infinite; }
+    @keyframes broadcast-pulse { 50% { opacity:.35; } }
+    .broadcast-title { margin:8px 28px 5px 0; color:#fff; font-size:13px; font-weight:700; line-height:1.45; }
+    .broadcast-coordinate { color:rgba(255,255,255,.58); font:8px var(--mono); }
+    .broadcast-risk { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin:11px 0; }
+    .broadcast-risk-item { min-width:0; padding:8px; border:1px solid rgba(255,255,255,.09); border-radius:6px; background:rgba(255,255,255,.025); }
+    .broadcast-risk-item span { color:rgba(255,255,255,.56); font:7px var(--mono); }
+    .broadcast-risk-item strong { float:right; color:#fff; font:10px var(--mono); }
+    .broadcast-actions { display:flex; justify-content:flex-end; }
+    .dispatch-route-button { min-height:35px; padding:0 12px; border:1px solid rgba(255,92,108,.48); border-radius:6px; background:rgba(255,57,76,.13); color:#fff; font:8px var(--mono); }
+    .dispatch-route-button:hover { background:rgba(255,57,76,.23); }
+    .dispatch-route-button:disabled { opacity:.5; }
+    .emergency-ring { animation:ring-pulse 1.5s ease-in-out infinite; }
+    @keyframes ring-pulse { 50% { fill-opacity:.02; opacity:.35; } }
+    .moving-fleet-icon { display:grid; width:27px; height:27px; place-items:center; border:1px solid rgba(255,255,255,.8); border-radius:50%; background:rgba(18,35,48,.9); color:#fff; box-shadow:0 0 18px rgba(136,204,255,.7); }
+    .moving-fleet-icon svg { width:14px; height:14px; }
+    .simulation-hud { position:absolute; z-index:640; top:84px; right:18px; width:190px; padding:12px; }
+    .simulation-hud[hidden] { display:none; }
+    .sim-title { display:flex; align-items:center; justify-content:space-between; color:rgba(255,255,255,.85); font:8px var(--mono); }
+    .sim-value { margin-top:8px; font-size:11px; }
+    .sim-sub { margin-top:4px; color:var(--muted); font:7px var(--mono); }
+    .sim-stop { margin-top:10px; padding:5px 8px; border:1px solid var(--edge); border-radius:5px; background:rgba(255,255,255,.04); color:var(--muted); font:7px var(--mono); }
+    .map-pin { display:grid; width:27px; height:27px; place-items:center; border:1px solid rgba(205,237,255,.82); border-radius:50% 50% 50% 3px; background:rgba(83,168,224,.22); color:#e8f7ff; box-shadow:0 0 19px rgba(105,190,255,.55); transform:rotate(-45deg); }
+    .map-pin svg { width:13px; height:13px; transform:rotate(45deg); }
+    #simulation-canvas { position:absolute; z-index:450; inset:0; width:100%; height:100%; pointer-events:none; }
+    .map-instructions { position:absolute; z-index:500; right:18px; top:63px; padding:8px 11px; color:rgba(255,255,255,.65); font:7px var(--mono); pointer-events:none; }
+    .search-results { position:absolute; z-index:900; top:46px; left:0; right:0; display:none; overflow:hidden; border:1px solid var(--edge); border-radius:7px; background:rgba(8,14,22,.96); box-shadow:0 12px 30px #0007; }
+    .search-results.open { display:block; }
+    .search-result { display:block; width:100%; padding:10px; border:0; border-bottom:1px solid rgba(255,255,255,.06); background:transparent; color:rgba(255,255,255,.83); text-align:left; font-size:9px; }
+    .search-result:hover { background:rgba(136,204,255,.09); }
+    @media(max-width:760px) {
+      .topbar { top:9px; left:9px; right:9px; height:48px; gap:8px; padding:0 9px; }
+      .brand { flex:0 0 31px; }.brand-copy,.top-status { display:none; }.brand-icon { width:29px;height:29px; }
+      .search { max-width:none; }.search input { height:32px; padding-right:59px; font-size:9px; }.search button { height:24px; }
+      .unit-control { height:30px; padding:0 7px; font-size:7px; }
+      .weather-panel { top:auto; left:9px; right:9px; bottom:9px; width:auto; max-height:min(57vh,470px); padding:13px; }
+      .location-name { margin-top:10px; font-size:16px; }.current-weather { padding:10px 0; }.temperature { font-size:43px; }
+      .panel-section-title { margin-top:9px; }.hour { flex-basis:43px; }.detail { min-height:51px; }
+      .map-instructions { top:64px; right:9px; }.pick-panel { right:9px; bottom:calc(min(57vh,470px) + 18px); width:min(260px,calc(100vw - 18px)); }
+      .simulation-hud { top:64px; right:9px; width:160px; }.leaflet-bottom { bottom:min(57vh,470px); }
+      .breaking-overlay { top:62px; width:calc(100vw - 18px); padding:12px; }
+      .broadcast-title { font-size:11px; }
+    }
+    @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms!important; animation-iteration-count:1!important; scroll-behavior:auto!important; } }
+  </style>
+</head>
+<body>
+  <div id="map" aria-label="Interactive OpenStreetMap weather map"></div>
+  <canvas id="simulation-canvas" aria-hidden="true"></canvas>
+
+  <header class="topbar glass">
+    <div class="brand">
+      <span class="brand-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 18 12 4l8 14H4Z"/><path d="M8 18 12 11l4 7M12 4v7"/></svg></span>
+      <div class="brand-copy"><div class="brand-title">AEROGRAPH</div><div class="brand-caption">WEATHER FIELD / LIVE</div></div>
+    </div>
+    <form class="search" id="search-form" role="search">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>
+      <input id="location-search" type="search" placeholder="Search a place or coordinates" autocomplete="off" aria-label="Search a location">
+      <button type="submit">SEARCH</button>
+      <div class="search-results" id="search-results"></div>
+    </form>
+    <div class="top-status"><span class="status-dot"></span><span id="network-status">WEATHER READY</span></div>
+    <select class="unit-control" id="temperature-unit" aria-label="Temperature units"><option value="c">°C</option><option value="f">°F</option></select>
+  </header>
+
+  <aside class="panel glass weather-panel" id="weather-panel" aria-live="polite">
+    <div class="panel-top"><span class="eyebrow">Local conditions</span><span class="weather-live"><i class="status-dot"></i><span id="weather-status">READY</span></span></div>
+    <h1 class="location-name" id="location-name">Inspect a location</h1>
+    <div class="coordinates" id="coordinates">Move or click the map to load live data</div>
+    <div class="current-weather">
+      <svg class="weather-symbol" id="weather-symbol" viewBox="0 0 64 64" fill="none" aria-hidden="true"><circle cx="24" cy="25" r="10" fill="currentColor" opacity=".85"/><path d="M24 7v4m0 28v4M6 25h4m28 0h4M11.3 12.3l2.8 2.8m19.8 19.8 2.8 2.8m0-25.4-2.8 2.8m-19.8 19.8-2.8 2.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M24 48h25a9 9 0 0 0 0-18 12 12 0 0 0-23-2 10 10 0 0 0-2 20Z" fill="rgba(255,255,255,.16)" stroke="currentColor" stroke-width="1.7"/></svg>
+      <div><div class="temperature"><span id="temperature">--</span><span class="temperature-unit" id="unit-symbol">°C</span></div><div class="weather-condition" id="condition">Waiting for weather data</div></div>
+      <div class="high-low"><div>H <span id="high-temp">--</span></div><div>L <span id="low-temp">--</span></div></div>
+    </div>
+    <div class="weather-summary" id="weather-summary">Move across the map to inspect local conditions. Hover and pause to load a detailed report.</div>
+
+    <div class="panel-section-title"><span>Next hours</span><span>RAIN / TEMP</span></div>
+    <div class="hourly-row" id="hourly-forecast"><div class="hour"><div class="hour-time">--</div><div class="hour-temp">--°</div><div class="hour-rain">--%</div></div></div>
+
+    <div class="panel-section-title"><span>Atmosphere</span><span id="air-quality-label">LIVE DATA</span></div>
+    <div class="details-grid">
+      <div class="detail"><div class="detail-label">Feels like</div><div class="detail-value" id="feels-like">--</div></div>
+      <div class="detail"><div class="detail-label">Humidity</div><div class="detail-value" id="humidity">--<small>%</small></div></div>
+      <div class="detail"><div class="detail-label">Dew point</div><div class="detail-value" id="dew-point">--</div></div>
+      <div class="detail"><div class="detail-label">Pressure</div><div class="detail-value" id="pressure">--<small> hPa</small></div></div>
+      <div class="detail"><div class="detail-label">UV index</div><div class="detail-value" id="uv-index">--</div></div>
+      <div class="detail"><div class="detail-label">Air quality</div><div class="detail-value" id="aqi">--<small> AQI</small></div></div>
+      <div class="detail"><div class="detail-label">Wind / gusts</div><div class="detail-value" id="wind">--</div></div>
+      <div class="detail"><div class="detail-label">Rain chance</div><div class="detail-value" id="rain-chance">--<small>%</small></div></div>
+    </div>
+    <div class="panel-section-title"><span>Location risk</span><span id="risk-source">LIVE USGS / TERRAIN</span></div>
+    <div class="risk-grid" aria-live="polite">
+      <div class="risk-cell"><div class="risk-name">EARTHQUAKE</div><div class="risk-value risk-unavailable" id="risk-earthquake">--</div><div class="risk-level" id="level-earthquake">WAITING</div><div class="risk-track"><div class="risk-fill" id="bar-earthquake"></div></div></div>
+      <div class="risk-cell"><div class="risk-name">FLOOD</div><div class="risk-value risk-unavailable" id="risk-flood">--</div><div class="risk-level" id="level-flood">WAITING</div><div class="risk-track"><div class="risk-fill" id="bar-flood"></div></div></div>
+      <div class="risk-cell"><div class="risk-name">LANDSLIDE</div><div class="risk-value risk-unavailable" id="risk-landslide">--</div><div class="risk-level" id="level-landslide">WAITING</div><div class="risk-track"><div class="risk-fill" id="bar-landslide"></div></div></div>
+    </div>
+    <div class="notice" id="terrain-note">Terrain gradient and nearest active tremor are evaluated at the inspected point.</div>
+    <div class="panel-section-title"><span>5-day outlook</span><span>HIGH / LOW</span></div>
+    <div id="daily-forecast"></div>
+    <p class="notice" id="panel-notice">Weather requests are debounced and cached by map location.</p>
+  </aside>
+
+  <div class="map-instructions glass">MOVE TO INSPECT · CLICK MAP TO DROP A LIVE PIN</div>
+  <div class="cursor-badge" id="cursor-badge"><div class="cursor-coords" id="cursor-coords">--</div><div class="cursor-temp" id="cursor-temp">WEATHER PENDING</div></div>
+
+  <section class="pick-panel glass" id="pick-panel" hidden>
+    <div class="pick-title">Selected location</div>
+    <div class="pick-coord" id="pick-coordinate">--</div>
+    <div class="mode-switch" role="group" aria-label="Simulation mode">
+      <button class="mode-button active" data-mode="particles" type="button">WIND / RAIN</button>
+      <button class="mode-button" data-mode="radius" type="button">IMPACT RADIUS</button>
+    </div>
+    <button class="simulation-button" id="simulate-emergency" type="button" disabled>SIMULATE LIVE DISASTER</button>
+    <button class="simulation-button" id="start-simulation" type="button" style="margin-top:6px">START LIVE SIMULATION</button>
+  </section>
+
+  <section class="simulation-hud glass" id="simulation-hud" hidden>
+    <div class="sim-title"><span id="simulation-name">WIND FIELD</span><span class="weather-live"><i class="status-dot"></i> ACTIVE</span></div>
+    <div class="sim-value" id="simulation-value">--</div>
+    <div class="sim-sub" id="simulation-sub">LIVE MAP-PROJECTED FIELD</div>
+    <button class="sim-stop" id="stop-simulation" type="button">STOP SIMULATION</button>
+  </section>
+
+  <section class="breaking-overlay glass" id="breaking-overlay" role="alert" aria-live="assertive" hidden>
+    <div class="broadcast-kicker"><span class="broadcast-dot"></span> BREAKING EMERGENCY BROADCAST <span id="broadcast-time"></span></div>
+    <button class="breaking-close" id="close-broadcast" type="button" aria-label="Dismiss alert">×</button>
+    <h2 class="broadcast-title" id="broadcast-title">HIGH-RISK HAZARD DETECTED</h2>
+    <div class="broadcast-coordinate" id="broadcast-coordinate">--</div>
+    <div class="broadcast-risk">
+      <div class="broadcast-risk-item"><span>EARTHQUAKE</span><strong id="broadcast-earthquake">--</strong></div>
+      <div class="broadcast-risk-item"><span>FLOOD</span><strong id="broadcast-flood">--</strong></div>
+      <div class="broadcast-risk-item"><span>LANDSLIDE</span><strong id="broadcast-landslide">--</strong></div>
+    </div>
+    <div class="broadcast-actions"><button class="dispatch-route-button" id="dispatch-route" type="button">EXECUTE OPTIMAL DISPATCH ROUTING</button></div>
+  </section>
+
+  <script>
+    const map = L.map('map', { zoomControl: false, zoomAnimation: true, fadeAnimation: true, markerZoomAnimation: true }).setView([11.2588, 75.7804], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      subdomains: 'abc',
+      updateWhenIdle: true,
+      keepBuffer: 4
+    }).addTo(map);
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    L.control.scale({ position: 'bottomleft', imperial: false, maxWidth: 120 }).addTo(map);
+    map.invalidateSize();
+
+    const weatherPanel = document.getElementById('weather-panel');
+    const panelNotice = document.getElementById('panel-notice');
+    const cursorBadge = document.getElementById('cursor-badge');
+    const cursorCoords = document.getElementById('cursor-coords');
+    const cursorTemp = document.getElementById('cursor-temp');
+    const simulationCanvas = document.getElementById('simulation-canvas');
+    const context = simulationCanvas.getContext('2d');
+    const emergencyLayer = L.layerGroup().addTo(map);
+    const weatherIcons = {
+      clear: '<circle cx="32" cy="32" r="11" fill="currentColor" opacity=".88"/><path d="M32 5v6m0 42v6M5 32h6m42 0h6M13 13l4 4m30 30 4 4m0-38-4 4M17 47l-4 4" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
+      cloud: '<path d="M19 44h29a10 10 0 0 0 0-20 14 14 0 0 0-27-2A11 11 0 0 0 19 44Z" fill="rgba(255,255,255,.16)" stroke="currentColor" stroke-width="2"/>',
+      rain: '<path d="M18 37h30a9 9 0 0 0 0-18 13 13 0 0 0-25-2 10 10 0 0 0-5 20Z" fill="rgba(255,255,255,.13)" stroke="currentColor" stroke-width="2"/><path d="m24 43-3 8m15-8-3 8m15-8-3 8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>'
+    };
+    let hoverTimer = null;
+    let hoverRequestController = null;
+    let hoverLocation = null;
+    let selectedLatLng = null;
+    let selectedPin = null;
+    let simulationMode = 'particles';
+    let simulationActive = false;
+    let animationFrame = null;
+    let particles = [];
+    let radiusStarted = 0;
+    let radiusKm = 1.2;
+    let temperatureUnit = 'c';
+    let latestWeatherData = null;
+    let selectedWeatherData = null;
+    let dispatchAnimation = null;
+    function celsius(value) { return temperatureUnit === 'f' ? Math.round(value * 9 / 5 + 32) : Math.round(value); }
+    function temperatureText(value) { return `${celsius(value)}°${temperatureUnit.toUpperCase()}`; }
+    function conditionFromCode(code) {
+      if (code === 0) return 'Clear';
+      if ([1, 2].includes(code)) return 'Mostly clear';
+      if ([3, 45, 48].includes(code)) return 'Cloudy';
+      if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) return 'Rain';
+      if ([71, 73, 75, 77, 85, 86].includes(code)) return 'Snow';
+      if ([95, 96, 99].includes(code)) return 'Thunderstorms';
+      return 'Partly cloudy';
+    }
+    function iconMarkup(condition) {
+      const lower = condition.toLowerCase();
+      const content = /rain|drizzle|thunder|storm/.test(lower) ? weatherIcons.rain : /cloud|overcast|fog/.test(lower) ? weatherIcons.cloud : weatherIcons.clear;
+      return `<svg class="weather-symbol" viewBox="0 0 64 64" fill="none" aria-hidden="true">${content}</svg>`;
+    }
+    async function reverseName(lat, lng, signal) {
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`, { signal, headers: { Accept: 'application/json' } });
+        if (!response.ok) throw new Error('Reverse geocoder unavailable');
+        const data = await response.json();
+        const address = data.address || {};
+        return address.city || address.town || address.village || address.county || data.name || `${lat.toFixed(3)}°, ${lng.toFixed(3)}°`;
+      } catch (_error) { return `${lat.toFixed(3)}°, ${lng.toFixed(3)}°`; }
+    }
+
+    async function fetchWeather(lat, lng, signal) {
+      const params = new URLSearchParams({ lat: String(lat), lon: String(lng) });
+      const settled = await Promise.allSettled([
+        fetch(`/api/predict_hazards?${params}`, { signal }).then(async (response) => {
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || 'Weather analysis unavailable');
+          return data;
+        }),
+        reverseName(lat, lng, signal)
+      ]);
+      if (settled[0].status !== 'fulfilled') throw settled[0].reason;
+      const analysis = settled[0].value;
+      const current = analysis.weather.current;
+      const hourly = analysis.weather.hourly || {};
+      const daily = analysis.weather.daily || {};
+      const now = Date.now();
+      const hourRows = (hourly.time || []).map((time, index) => ({ time, temperature_c: hourly.temperature_2m?.[index] ?? current.temperature_2m, rain_probability: hourly.precipitation_probability?.[index] ?? 0, dew_point_c: hourly.dew_point_2m?.[index], uv: hourly.uv_index?.[index] })).filter((row) => new Date(row.time).getTime() >= now).slice(0, 12);
+      const dailyRows = (daily.time || []).map((date, index) => ({ date, high_c: daily.temperature_2m_max?.[index] ?? current.temperature_2m, low_c: daily.temperature_2m_min?.[index] ?? current.temperature_2m, rain_probability: daily.precipitation_probability_max?.[index] ?? 0 })).slice(0, 5);
+      const currentHour = Math.max(0, (hourly.time || []).findIndex((time) => new Date(time).getTime() >= now));
+      return {
+        location: settled[1].status === 'fulfilled' ? settled[1].value : `${lat.toFixed(5)}°, ${lng.toFixed(5)}°`,
+        temperature_c: current.temperature_2m,
+        feels_like_c: current.apparent_temperature,
+        condition: conditionFromCode(current.weather_code),
+        high_c: daily.temperature_2m_max?.[0] ?? current.temperature_2m,
+        low_c: daily.temperature_2m_min?.[0] ?? current.temperature_2m,
+        humidity: current.relative_humidity_2m,
+        dew_point_c: hourly.dew_point_2m?.[currentHour] ?? current.temperature_2m,
+        pressure: current.pressure_msl,
+        uv: hourly.uv_index?.[currentHour] ?? 0,
+        aqi: analysis.weather.aqi,
+        wind_kmh: current.wind_speed_10m,
+        gust_kmh: current.wind_gusts_10m,
+        wind_direction: current.wind_direction_10m ?? 0,
+        rain_probability: hourly.precipitation_probability?.[currentHour] ?? 0,
+        hourly: hourRows,
+        daily: dailyRows,
+        source: 'OPEN-METEO LIVE',
+        analysis
+      };
+    }
+
+    function renderWeather(data, lat, lng) {
+      latestWeatherData = data;
+      document.getElementById('location-name').textContent = data.location;
+      document.getElementById('coordinates').textContent = `${Math.abs(lat).toFixed(4)}° ${lat >= 0 ? 'N' : 'S'} / ${Math.abs(lng).toFixed(4)}° ${lng >= 0 ? 'E' : 'W'}`;
+      document.getElementById('temperature').textContent = celsius(data.temperature_c);
+      document.getElementById('unit-symbol').textContent = `°${temperatureUnit.toUpperCase()}`;
+      document.getElementById('condition').textContent = data.condition;
+      document.getElementById('high-temp').textContent = temperatureText(data.high_c);
+      document.getElementById('low-temp').textContent = temperatureText(data.low_c);
+      document.getElementById('weather-symbol').outerHTML = iconMarkup(data.condition);
+      document.getElementById('feels-like').textContent = temperatureText(data.feels_like_c);
+      document.getElementById('humidity').innerHTML = `${Math.round(data.humidity)}<small>%</small>`;
+      document.getElementById('dew-point').textContent = temperatureText(data.dew_point_c);
+      document.getElementById('pressure').innerHTML = `${data.pressure == null ? '--' : Math.round(data.pressure)}<small> hPa</small>`;
+      document.getElementById('uv-index').textContent = Number(data.uv).toFixed(1);
+      document.getElementById('aqi').innerHTML = `${data.aqi == null ? '--' : Math.round(data.aqi)}<small> AQI</small>`;
+      const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+      const compass = directions[Math.round((Number(data.wind_direction) % 360) / 22.5) % 16];
+      document.getElementById('wind').innerHTML = `${data.wind_kmh == null ? '--' : Math.round(data.wind_kmh)}<small> / ${data.gust_kmh == null ? '--' : Math.round(data.gust_kmh)} km/h · ${compass}</small>`;
+      document.getElementById('rain-chance').innerHTML = `${Math.round(data.rain_probability)}<small>%</small>`;
+      document.getElementById('air-quality-label').textContent = data.aqi == null ? 'AQI OFFLINE' : 'OPEN-METEO AIR';
+      document.getElementById('weather-status').textContent = data.source;
+      document.getElementById('weather-summary').textContent = `${data.condition}. Feels like ${temperatureText(data.feels_like_c)} with ${Math.round(data.humidity)}% humidity. ${Math.round(data.rain_probability)}% chance of rain in the current hour.`;
+      document.getElementById('hourly-forecast').innerHTML = data.hourly.slice(0, 12).map((hour) => `<div class="hour"><div class="hour-time">${new Date(hour.time).toLocaleTimeString([], { hour: 'numeric' })}</div><svg class="hour-icon" viewBox="0 0 64 64" fill="none">${Number(hour.rain_probability) > 40 ? weatherIcons.rain : weatherIcons.clear}</svg><div class="hour-temp">${celsius(hour.temperature_c)}°</div><div class="hour-rain">${Math.round(hour.rain_probability)}% rain</div></div>`).join('') || '<div class="notice">Hourly forecast unavailable.</div>';
+      document.getElementById('daily-forecast').innerHTML = data.daily.map((day) => `<div class="forecast-row"><span class="forecast-day">${new Date(`${day.date}T12:00:00`).toLocaleDateString([], { weekday: 'short' })}</span><span class="forecast-rain">${Math.round(day.rain_probability)}% rain</span><span class="forecast-temps">${celsius(day.high_c)}° / ${celsius(day.low_c)}°</span></div>`).join('') || '<div class="notice">Daily forecast unavailable.</div>';
+      panelNotice.textContent = `${data.source} · Updated ${new Date().toLocaleTimeString()}`;
+      renderLocationRisks(data.analysis);
+      if (selectedLatLng && Math.abs(selectedLatLng.lat - lat) < .0001 && Math.abs(selectedLatLng.lng - lng) < .0001) {
+        selectedWeatherData = data;
+        document.getElementById('simulate-emergency').disabled = false;
+      }
+    }
+
+    function renderLocationRisks(analysis) {
+      for (const risk of analysis.risks) {
+        const value = document.getElementById(`risk-${risk.kind}`);
+        const level = document.getElementById(`level-${risk.kind}`);
+        const bar = document.getElementById(`bar-${risk.kind}`);
+        if (risk.probability == null) {
+          value.textContent = '--';
+          value.classList.add('risk-unavailable');
+          level.textContent = 'USGS UNAVAILABLE';
+          bar.style.width = '0%';
+        } else {
+          const percent = Math.round(risk.probability * 100);
+          value.textContent = `${percent}%`;
+          value.classList.remove('risk-unavailable');
+          level.textContent = risk.level;
+          bar.style.width = `${percent}%`;
+        }
+      }
+      const slope = analysis.terrain.slope_degrees;
+      const elevation = analysis.terrain.elevation_m;
+      document.getElementById('risk-source').textContent = analysis.sources.seismic === 'USGS' ? 'USGS / LIVE TERRAIN' : 'USGS UNAVAILABLE';
+      document.getElementById('terrain-note').textContent = slope == null
+        ? 'Terrain elevation unavailable; landslide estimate uses live precipitation and humidity only.'
+        : `Elevation ${elevation} m · Local slope ${slope}° · Rain ${Number(analysis.rainfall_mm_h).toFixed(1)} mm/h · Humidity ${analysis.weather.current.relative_humidity_2m}%`;
+    }
+
+    function clearUnavailableWeather(message, lat, lng) {
+      document.getElementById('location-name').textContent = `${lat.toFixed(4)}°, ${lng.toFixed(4)}°`;
+      document.getElementById('coordinates').textContent = `${lat.toFixed(5)}° / ${lng.toFixed(5)}°`;
+      document.getElementById('temperature').textContent = '--';
+      document.getElementById('condition').textContent = 'Weather unavailable';
+      document.getElementById('high-temp').textContent = '--';
+      document.getElementById('low-temp').textContent = '--';
+      for (const id of ['feels-like', 'dew-point', 'uv-index']) document.getElementById(id).textContent = '--';
+      for (const id of ['humidity', 'pressure', 'aqi', 'wind', 'rain-chance']) document.getElementById(id).textContent = '--';
+      document.getElementById('hourly-forecast').replaceChildren();
+      document.getElementById('daily-forecast').replaceChildren();
+      document.getElementById('weather-status').textContent = 'UNAVAILABLE';
+      document.getElementById('weather-summary').textContent = message;
+      panelNotice.textContent = message;
+      for (const kind of ['earthquake', 'flood', 'landslide']) {
+        document.getElementById(`risk-${kind}`).textContent = '--';
+        document.getElementById(`level-${kind}`).textContent = 'UNAVAILABLE';
+        document.getElementById(`bar-${kind}`).style.width = '0%';
+      }
+      latestWeatherData = null;
+      if (selectedLatLng && Math.abs(selectedLatLng.lat - lat) < .0001 && Math.abs(selectedLatLng.lng - lng) < .0001) {
+        selectedWeatherData = null;
+        document.getElementById('simulate-emergency').disabled = true;
+      }
+    }
+
+    function updateBroadcastRisk(analysis) {
+      const byKind = Object.fromEntries(analysis.risks.map((risk) => [risk.kind, risk]));
+      for (const kind of ['earthquake', 'flood', 'landslide']) {
+        const risk = byKind[kind];
+        document.getElementById(`broadcast-${kind}`).textContent = risk.probability == null
+          ? 'N/A' : `${Math.round(risk.probability * 100)}% ${risk.level}`;
+      }
+      return byKind;
+    }
+
+    function simulateSelectedEmergency() {
+      if (!selectedLatLng || !selectedWeatherData) return;
+      const analysis = selectedWeatherData.analysis;
+      const risks = updateBroadcastRisk(analysis);
+      const lat = selectedLatLng.lat;
+      const lng = selectedLatLng.lng;
+      const location = selectedWeatherData.location;
+      const primaryRisk = [risks.landslide, risks.flood, risks.earthquake]
+        .filter((risk) => risk.probability != null)
+        .sort((left, right) => right.probability - left.probability)[0];
+      const hazardLabel = primaryRisk ? primaryRisk.label.toUpperCase() : 'ENVIRONMENTAL';
+      document.getElementById('broadcast-title').textContent = `HIGH-RISK ${hazardLabel} / WEATHER CONDITIONS DETECTED AT ${location.toUpperCase()}`;
+      document.getElementById('broadcast-coordinate').textContent = `LAT ${lat.toFixed(5)} · LON ${lng.toFixed(5)} · ${new Date().toLocaleTimeString()}`;
+      document.getElementById('broadcast-time').textContent = new Date().toLocaleTimeString();
+      document.getElementById('breaking-overlay').hidden = false;
+      emergencyLayer.clearLayers();
+      const probability = Math.max(...[risks.landslide, risks.flood, risks.earthquake].map((risk) => risk.probability || 0));
+      L.circle(selectedLatLng, { radius: 180 + probability * 520, color: '#ff6574', weight: 2, opacity: .85, fillColor: '#ff4158', fillOpacity: .08, className: 'emergency-ring' }).addTo(emergencyLayer);
+      L.circleMarker(selectedLatLng, { radius: 7, color: '#fff', weight: 2, fillColor: '#ff4c62', fillOpacity: .95, className: 'emergency-ring' }).addTo(emergencyLayer);
+      if (analysis.nearest_earthquake) {
+        const quake = analysis.nearest_earthquake;
+        L.circle([quake.lat, quake.lng], { radius: Math.max(500, quake.magnitude * 1500), color: '#ff6574', weight: 1, opacity: .7, fillColor: '#ff4158', fillOpacity: .04, className: 'emergency-ring' })
+          .bindTooltip(`USGS M${quake.magnitude} · ${quake.distance_km} km`, { className: 'hazard-tooltip' }).addTo(emergencyLayer);
+      }
+      map.panTo(selectedLatLng, { animate: true, duration: .6 });
+    }
+
+    function fleetIcon() {
+      const html = '<span class="moving-fleet-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m4 15 2-6h12l2 6M3 15h18v4H3zM8 9l1-3h6l1 3M7 19v2m10-2v2"/></svg></span>';
+      return L.divIcon({ className: '', html, iconSize: [27, 27], iconAnchor: [13, 13] });
+    }
+
+    function animateDispatch(coordinates, callsign) {
+      if (dispatchAnimation) cancelAnimationFrame(dispatchAnimation);
+      routeLayer.clearLayers();
+      const points = coordinates.map((coordinate) => L.latLng(coordinate[0], coordinate[1]));
+      const path = L.polyline(points, { color: '#ff6877', weight: 3, opacity: .9, dashArray: '10 8', className: 'route-glow' }).addTo(routeLayer);
+      path.bindTooltip(`OPTIMAL ROUTE · ${callsign}`, { className: 'hazard-tooltip' });
+      const vehicle = L.marker(points[0], { icon: fleetIcon(), title: callsign }).addTo(routeLayer);
+      if (points.length < 2) return;
+      const lengths = points.slice(1).map((point, index) => points[index].distanceTo(point));
+      const totalLength = lengths.reduce((sum, length) => sum + length, 0);
+      const duration = Math.max(5000, totalLength / 1000 * 1600);
+      let started = null;
+      function frame(timestamp) {
+        if (started === null) started = timestamp;
+        let distance = Math.min(1, (timestamp - started) / duration) * totalLength;
+        let segment = 0;
+        while (segment < lengths.length - 1 && distance > lengths[segment]) {
+          distance -= lengths[segment];
+          segment += 1;
+        }
+        const fraction = lengths[segment] ? distance / lengths[segment] : 1;
+        const from = points[segment];
+        const to = points[segment + 1];
+        vehicle.setLatLng([from.lat + (to.lat - from.lat) * fraction, from.lng + (to.lng - from.lng) * fraction]);
+        if (timestamp - started < duration) dispatchAnimation = requestAnimationFrame(frame);
+      }
+      dispatchAnimation = requestAnimationFrame(frame);
+      map.fitBounds(path.getBounds().pad(.24), { maxZoom: 14, animate: true });
+    }
+
+    async function executeEmergencyDispatch() {
+      if (!selectedLatLng || !selectedWeatherData) return;
+      const button = document.getElementById('dispatch-route');
+      button.disabled = true;
+      button.textContent = 'CALCULATING OPTIMAL ROUTE...';
+      const analysis = selectedWeatherData.analysis;
+      const activeHazards = analysis.hazards.map((hazard) => ({
+        kind: hazard.kind,
+        lat: hazard.lat,
+        lng: hazard.lng,
+        risk: hazard.probability,
+        radius_km: hazard.kind === 'landslide' ? .32 : hazard.kind === 'flood' ? .24 : .18
+      }));
+      try {
+        const response = await fetch('/api/predict_and_dispatch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            start: { lat: 11.2588, lng: 75.7804 },
+            end: { lat: selectedLatLng.lat, lng: selectedLatLng.lng },
+            rainfall_rate_mm: Math.min(150, analysis.rainfall_mm_h),
+            insar_displacement_mm: Math.min(50, (analysis.terrain.slope_degrees || 0) * .7),
+            active_hazards: activeHazards
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Dispatch service unavailable');
+        animateDispatch(data.coordinates, data.dispatched_unit.callsign);
+        panelNotice.textContent = `${data.dispatched_unit.callsign} EN ROUTE · ${data.eta_minutes} MIN · ${data.distance_km} KM · ${data.drone.callsign} RECON ACTIVE`;
+        button.textContent = `ROUTE ACTIVE · ${data.dispatched_unit.callsign}`;
+      } catch (error) {
+        panelNotice.textContent = `Dispatch unavailable: ${error.message}`;
+        button.textContent = 'RETRY OPTIMAL DISPATCH ROUTING';
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    function queueWeather(lat, lng) {
+      hoverLocation = { lat, lng };
+      cursorCoords.textContent = `${lat.toFixed(4)}° / ${lng.toFixed(4)}°`;
+      cursorBadge.classList.add('visible');
+      cursorTemp.textContent = 'WEATHER PENDING';
+      window.clearTimeout(hoverTimer);
+      if (hoverRequestController) hoverRequestController.abort();
+      hoverTimer = window.setTimeout(async () => {
+        hoverRequestController = new AbortController();
+        const requestedLocation = { ...hoverLocation };
+        cursorTemp.textContent = 'FETCHING CONDITIONS';
+        try {
+          const data = await fetchWeather(requestedLocation.lat, requestedLocation.lng, hoverRequestController.signal);
+          if (hoverLocation !== null && Math.abs(hoverLocation.lat - requestedLocation.lat) < .0001 && Math.abs(hoverLocation.lng - requestedLocation.lng) < .0001) {
+            cursorTemp.textContent = `${temperatureText(data.temperature_c)} · ${data.condition.toUpperCase()}`;
+            renderWeather(data, requestedLocation.lat, requestedLocation.lng);
+          }
+        } catch (_error) {
+          if (!hoverLocation || Math.abs(hoverLocation.lat - requestedLocation.lat) >= .0001 || Math.abs(hoverLocation.lng - requestedLocation.lng) >= .0001) return;
+          cursorTemp.textContent = 'LIVE DATA UNAVAILABLE';
+          clearUnavailableWeather('Live weather or hazard services could not be reached. No static readings are shown.', requestedLocation.lat, requestedLocation.lng);
+        }
+      }, 280);
+    }
+
+    map.on('mousemove', (event) => {
+      const point = map.latLngToContainerPoint(event.latlng);
+      cursorBadge.style.left = `${Math.min(window.innerWidth - 155, point.x + 18)}px`;
+      cursorBadge.style.top = `${Math.max(60, point.y + 18)}px`;
+      queueWeather(event.latlng.lat, event.latlng.lng);
+    });
+    map.on('mouseout', () => { window.clearTimeout(hoverTimer); cursorBadge.classList.remove('visible'); hoverLocation = null; });
+
+    function pinIcon() { return L.divIcon({ className: '', html: '<span class="map-pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>', iconSize: [27, 27], iconAnchor: [13, 23] }); }
+    map.on('click', (event) => {
+      selectedLatLng = event.latlng;
+      selectedWeatherData = null;
+      emergencyLayer.clearLayers();
+      if (selectedPin) map.removeLayer(selectedPin);
+      selectedPin = L.marker(selectedLatLng, { icon: pinIcon(), keyboard: true, draggable: true }).addTo(map);
+      document.getElementById('simulate-emergency').disabled = true;
+      selectedPin.on('dragend', (dragEvent) => {
+        selectedLatLng = dragEvent.target.getLatLng();
+        selectedWeatherData = null;
+        emergencyLayer.clearLayers();
+        document.getElementById('pick-coordinate').textContent = `${selectedLatLng.lat.toFixed(5)}°, ${selectedLatLng.lng.toFixed(5)}°`;
+        document.getElementById('simulate-emergency').disabled = true;
+        queueWeather(selectedLatLng.lat, selectedLatLng.lng);
+      });
+      document.getElementById('pick-coordinate').textContent = `${selectedLatLng.lat.toFixed(5)}°, ${selectedLatLng.lng.toFixed(5)}°`;
+      document.getElementById('pick-panel').hidden = false;
+      document.getElementById('simulate-emergency').disabled = true;
+      document.getElementById('start-simulation').textContent = simulationActive ? 'RESTART LIVE SIMULATION' : 'START LIVE SIMULATION';
+      queueWeather(selectedLatLng.lat, selectedLatLng.lng);
+    });
+
+    document.querySelectorAll('.mode-button').forEach((button) => button.addEventListener('click', () => {
+      simulationMode = button.dataset.mode;
+      document.querySelectorAll('.mode-button').forEach((item) => item.classList.toggle('active', item === button));
+    }));
+
+    function resizeCanvas() {
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      simulationCanvas.width = Math.round(window.innerWidth * ratio);
+      simulationCanvas.height = Math.round(window.innerHeight * ratio);
+      simulationCanvas.style.width = `${window.innerWidth}px`;
+      simulationCanvas.style.height = `${window.innerHeight}px`;
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      map.invalidateSize({ pan: false });
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function startSimulation() {
+      if (!selectedLatLng) return;
+      simulationActive = true;
+      document.getElementById('pick-panel').hidden = true;
+      document.getElementById('simulation-hud').hidden = false;
+      const isParticleMode = simulationMode === 'particles';
+      document.getElementById('simulation-name').textContent = isParticleMode ? 'WIND / RAIN FIELD' : 'IMPACT RADIUS';
+      document.getElementById('simulation-sub').textContent = `${selectedLatLng.lat.toFixed(3)}°, ${selectedLatLng.lng.toFixed(3)}° · LIVE MAP PROJECTION`;
+      particles = Array.from({ length: 320 }, () => ({ x: Math.random() * window.innerWidth, y: Math.random() * window.innerHeight, speed: .3 + Math.random() * 1.7, length: 4 + Math.random() * 12, phase: Math.random() * Math.PI * 2 }));
+      radiusStarted = performance.now();
+      radiusKm = 1.2;
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(drawSimulation);
+    }
+
+    function drawSimulation(timestamp) {
+      context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      if (!simulationActive) return;
+      const selectedPoint = map.latLngToContainerPoint(selectedLatLng);
+      if (simulationMode === 'particles') {
+        context.lineWidth = 1;
+        for (const particle of particles) {
+          const angle = Math.sin(timestamp / 2500 + particle.phase) * .45 + .55;
+          const dx = Math.cos(angle) * particle.length;
+          const dy = Math.sin(angle) * particle.length;
+          context.strokeStyle = `rgba(132,202,248,${.14 + .3 * (Math.sin(particle.phase + timestamp / 700) + 1) / 2})`;
+          context.beginPath(); context.moveTo(particle.x, particle.y); context.lineTo(particle.x + dx, particle.y + dy); context.stroke();
+          particle.x += dx * particle.speed * .08; particle.y += dy * particle.speed * .08;
+          if (particle.x > window.innerWidth + 20) particle.x = -20;
+          if (particle.y > window.innerHeight + 20) particle.y = -20;
+        }
+        document.getElementById('simulation-value').textContent = `Wind ${Math.round(8 + 5 * (1 + Math.sin(timestamp / 1600)))} km/h · rain field active`;
+      } else {
+        const elapsed = (timestamp - radiusStarted) / 1000;
+        const pulse = elapsed % 4;
+        radiusKm = .25 + pulse * .32;
+        const projected = map.latLngToContainerPoint(selectedLatLng, map.getZoom());
+        const currentRadius = map.latLngToContainerPoint(L.latLng(selectedLatLng.lat, selectedLatLng.lng + radiusKm / (111 * Math.cos(selectedLatLng.lat * Math.PI / 180))), map.getZoom());
+        const radiusPixels = Math.abs(currentRadius.x - projected.x);
+        context.beginPath(); context.arc(selectedPoint.x, selectedPoint.y, radiusPixels, 0, Math.PI * 2);
+        context.fillStyle = 'rgba(136,204,255,.045)'; context.fill();
+        context.strokeStyle = `rgba(136,204,255,${.45 - pulse * .07})`; context.lineWidth = 1.5; context.stroke();
+        context.beginPath(); context.arc(selectedPoint.x, selectedPoint.y, radiusPixels * .66, 0, Math.PI * 2);
+        context.strokeStyle = 'rgba(136,204,255,.22)'; context.lineWidth = 1; context.setLineDash([5, 7]); context.stroke(); context.setLineDash([]);
+        document.getElementById('simulation-value').textContent = `${radiusKm.toFixed(1)} km radius · ${Math.round(Math.PI * radiusKm * radiusKm)} km² coverage`;
+      }
+      animationFrame = requestAnimationFrame(drawSimulation);
+    }
+
+    function stopSimulation() {
+      simulationActive = false;
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+      animationFrame = null;
+      context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      document.getElementById('simulation-hud').hidden = true;
+      if (selectedPin) document.getElementById('pick-panel').hidden = false;
+    }
+    document.getElementById('start-simulation').addEventListener('click', startSimulation);
+    document.getElementById('stop-simulation').addEventListener('click', stopSimulation);
+
+    document.getElementById('temperature-unit').addEventListener('change', (event) => {
+      temperatureUnit = event.target.value;
+      if (latestWeatherData?.analysis?.coordinates) renderWeather(latestWeatherData, latestWeatherData.analysis.coordinates.lat, latestWeatherData.analysis.coordinates.lon);
+    });
+
+    document.getElementById('simulate-emergency').addEventListener('click', simulateSelectedEmergency);
+    document.getElementById('dispatch-route').addEventListener('click', executeEmergencyDispatch);
+    document.getElementById('close-broadcast').addEventListener('click', () => { document.getElementById('breaking-overlay').hidden = true; });
+
+    const searchForm = document.getElementById('search-form');
+    const searchInput = document.getElementById('location-search');
+    const searchResults = document.getElementById('search-results');
+    let geocodeController = null;
+    searchForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const query = searchInput.value.trim();
+      if (!query) return;
+      const coordinateMatch = query.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+      if (coordinateMatch) {
+        map.setView([Number(coordinateMatch[1]), Number(coordinateMatch[2])], 12, { animate: true });
+        searchResults.classList.remove('open');
+        return;
+      }
+      if (geocodeController) geocodeController.abort();
+      geocodeController = new AbortController();
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(query)}`, { signal: geocodeController.signal, headers: { Accept: 'application/json' } });
+        if (!response.ok) throw new Error('Search service unavailable');
+        const results = await response.json();
+        if (!results.length) throw new Error('No matching locations found.');
+        searchResults.replaceChildren(...results.map((result, index) => {
+          const option = document.createElement('button');
+          option.className = 'search-result';
+          option.type = 'button';
+          option.dataset.result = String(index);
+          option.textContent = result.display_name;
+          return option;
+        }));
+        searchResults.classList.add('open');
+        searchResults.querySelectorAll('.search-result').forEach((button) => button.addEventListener('click', () => {
+          const result = results[Number(button.dataset.result)];
+          map.setView([Number(result.lat), Number(result.lon)], 13, { animate: true });
+          searchResults.classList.remove('open');
+          searchInput.value = result.display_name.split(',')[0];
+          queueWeather(Number(result.lat), Number(result.lon));
+        }));
+      } catch (_error) {
+        panelNotice.textContent = 'Location search unavailable. Try entering latitude, longitude.';
+      }
+    });
+    document.addEventListener('click', (event) => { if (!searchForm.contains(event.target)) searchResults.classList.remove('open'); });
+
+    const initialCenter = map.getCenter();
+    queueWeather(initialCenter.lat, initialCenter.lng);
+    map.invalidateSize();
+  </script>
+</body>
+</html>
